@@ -1,27 +1,43 @@
 import data
-from fastapi import FastAPI, Response
+import json
+from fastapi import FastAPI, Response, HTTPException
 from fastapi.responses import JSONResponse
-from models import ResponseModel, CreatedUserData, SuccessRegisterData, UpdatedUserData, User, CreateUserRequest
+from fastapi_pagination import Page, add_pagination, paginate
+from http import HTTPStatus
+from models import *
 from random import randint
 
 app = FastAPI()
+add_pagination(app)
+
+users: list[UserData] = []
 
 
-@app.get("/api/users/{user_id}", response_model=ResponseModel)
-def get_user(user_id: int) -> ResponseModel | JSONResponse:
-    users = data.users
-    support_info = data.support_info
-
-    user = users.get(user_id)
-    if not user:
-        return JSONResponse(
-            status_code=404, content={}
+@app.get("/status", response_model=AppStatus,status_code=HTTPStatus.OK)
+def get_status() -> AppStatus:
+    if not users:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail="No users found"
         )
+    return AppStatus(users=True)
 
-    return ResponseModel(data=user, support=support_info)
+
+@app.get("/api/users/{user_id}", status_code=HTTPStatus.OK)
+def get_user(user_id: int) -> UserData:
+    if user_id < 1:
+        raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail="Invalid user id")
+    if user_id > len(users):
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="User not found")
+    return users[user_id - 1]
 
 
-@app.post("/api/users", response_model=CreatedUserData, status_code=201)
+@app.get("/api/users",response_model=Page[UserData], status_code=HTTPStatus.OK)
+def get_users() -> list[UserData]:
+    return  paginate(users)
+
+
+@app.post("/api/users", response_model=CreatedUserData, status_code=HTTPStatus.CREATED)
 def create_user(request_data: CreateUserRequest) -> CreatedUserData:
     new_id = randint(100, 250)
     date = data.timestamp
@@ -34,7 +50,7 @@ def create_user(request_data: CreateUserRequest) -> CreatedUserData:
     )
 
 
-@app.post("/api/register", response_model=SuccessRegisterData)
+@app.post("/api/register", response_model=SuccessRegisterData, status_code=HTTPStatus.OK)
 def register_user(user: User) ->SuccessRegisterData | JSONResponse:
     if user.email == data.register_user['email'] and user.password == data.register_user['password']:
         return SuccessRegisterData(id=4, token="QpwL5tke4Pnpja7X4")
@@ -58,7 +74,7 @@ def register_user(user: User) ->SuccessRegisterData | JSONResponse:
         )
 
 
-@app.put("/api/users/{user_id}", response_model=UpdatedUserData)
+@app.put("/api/users/{user_id}", response_model=UpdatedUserData, status_code=HTTPStatus.OK)
 def update_user(user_id: int, req_data: CreateUserRequest) -> UpdatedUserData | JSONResponse:
     user_ids = [5,7]
     date = data.timestamp
@@ -73,10 +89,24 @@ def update_user(user_id: int, req_data: CreateUserRequest) -> UpdatedUserData | 
 
 
 @app.delete("/api/users/{user_id}")
-def delete_user() -> Response:
-    return Response(status_code=204)
+def delete_user(user_id) -> Response:
+    for user in users:
+        if user.id == user_id:
+            users.remove(user)
+            return Response(status_code=HTTPStatus.NO_CONTENT)
+
+    raise HTTPException(
+        status_code=HTTPStatus.NOT_FOUND,
+        detail=f"User with id {user_id} not found"
+    )
 
 
 if __name__ == "__main__":
+    with open("users.json") as f:
+        users = json.load(f)
+
+    for user in users:
+        UserData.model_validate(user)
+
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
