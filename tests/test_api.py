@@ -1,14 +1,9 @@
+import json
 import pytest
 import requests
 from http import HTTPStatus
-from models import UserData
 
-
-@pytest.fixture
-def users_list(app_url):
-    response = requests.get(f"{app_url}/api/users/")
-    assert response.status_code == HTTPStatus.OK
-    return response.json()
+from app.models.models import UserData, UserDataUpdate
 
 
 @pytest.mark.positive
@@ -33,13 +28,13 @@ def test_no_duplicated_users(users_list):
 
 
 @pytest.mark.positive
-@pytest.mark.parametrize('user_id', [1, 6, 12])
-def test_get_user(app_url, user_id):
-    response = requests.get(url=f"{app_url}/api/users/{user_id}")
+def test_get_user(app_url, fill_test_data):
+    for user_id in (fill_test_data[0], fill_test_data[-1]):
+        response = requests.get(url=f"{app_url}/api/users/{user_id}")
 
-    assert response.status_code == HTTPStatus.OK
-    user = response.json()
-    UserData.model_validate(user)
+        assert response.status_code == HTTPStatus.OK
+        user = response.json()
+        UserData.model_validate(user)
 
 
 @pytest.mark.negative
@@ -57,4 +52,32 @@ def test_get_user_invalid_values(app_url, user_id):
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
+
+@pytest.mark.positive
+def test_create_user(app_url, test_user):
+    response = requests.post(f'{app_url}/api/users/', json=test_user)
+    assert response.status_code == HTTPStatus.CREATED
+
+    created_user = response.json()
+    UserData.model_validate(created_user)
+    assert created_user['email'] == test_user['email']
+
+
+@pytest.mark.positive
+@pytest.mark.parametrize('email', ['new_email@gmail.com'])
+def test_update_user(app_url, create_user, email):
+    update_info = {'email': email}
+    response = requests.patch(f'{app_url}/api/users/{create_user}', json=update_info)
+    assert response.status_code == HTTPStatus.OK
+
+    updated_user = response.json()
+    UserDataUpdate.model_validate(updated_user)
+    assert updated_user['email'] == update_info['email']
+
+
+@pytest.mark.positive
+def test_delete_user(app_url, create_user):
+    response = requests.delete(f'{app_url}/api/users/{create_user}')
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()['message'] == 'User deleted'
 
