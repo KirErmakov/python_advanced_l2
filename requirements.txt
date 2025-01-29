@@ -6,3 +6,7 @@ requests==2.32.3
 uvicorn==0.34.0
 email-validator==2.2.0
 fastapi-pagination==0.12.34
+sqlmodel==0.0.22
+sqlalchemy==2.0.37
+psycopg2-binary==2.9.10
+Faker==35.0.0
