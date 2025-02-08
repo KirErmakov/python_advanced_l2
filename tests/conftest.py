@@ -19,7 +19,7 @@ def app_url():
 
 @pytest.fixture(scope='session')
 def fill_test_data(app_url):
-    with open("../users.json") as f:
+    with open('users.json') as f:
         test_data_users = json.load(f)
     api_users = []
     for user in test_data_users:
