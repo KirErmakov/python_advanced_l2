@@ -1,8 +1,6 @@
-import requests
 import pytest
 from math import ceil
 from http import HTTPStatus
-
 
 
 @pytest.mark.parametrize("page,size", [
@@ -12,54 +10,63 @@ from http import HTTPStatus
     (4, 3),
     (6, 2)
 ])
+@pytest.mark.positive
 @pytest.mark.usefixtures("fill_test_data")
-def test_pagination(app_url, page, size):
-    params = {'page': page, 'size': size}
-    response = requests.get(f"{app_url}/api/users", params=params)
-
+def test_pagination(api_client, page, size):
+    """Тест базовой пагинации: items, total, page, size"""
+    response = api_client.session.get("/api/users", params={'page': page, 'size': size})
     assert response.status_code == HTTPStatus.OK
 
     data = response.json()
-    assert "items" in data, "Отсутствует ключ 'items' в ответе"
-    assert "total" in data, "Отсутствует ключ 'total' в ответе"
+    assert "items" in data, "Missing 'items'"
+    assert "total" in data, "Missing 'total'"
+    assert "page" in data, "Missing 'page'"
+    assert "size" in data, "Missing 'size'"
 
-    assert len(data['items']) == size, f"Размер страницы превышает ожидаемое (size={size})"
-    assert data['page'] == page, f"Неверный номер страницы: {data['page']} вместо {page}"
-    assert data['size'] == size, f"Неверный размер страницы: {data['page']} вместо {size}"
+    assert len(data["items"]) == size, f"Expected page size {size}, got {len(data['items'])}"
+    assert data["page"] == page, f"Expected page {page}, got {data['page']}"
+    assert data["size"] == size, f"Expected size {size}, got {data['size']}"
 
 
 @pytest.mark.parametrize("size", [1, 2, 6, 11, 12, 13])
+@pytest.mark.positive
 @pytest.mark.usefixtures("fill_test_data")
-def test_pagination_total_pages(app_url, size):
-    response = requests.get(f"{app_url}/api/users", params={"page": 1, "size": size})
+def test_pagination_total_pages(api_client, size):
+    """Проверка правильного расчета общего количества страниц"""
+    response = api_client.session.get("/api/users", params={'page': 1, 'size': size})
     assert response.status_code == HTTPStatus.OK
 
     data = response.json()
     total_items = data['total']
     expected_pages = ceil(total_items / size)
+
+    assert "pages" in data, "Missing 'pages'"
     assert data['pages'] == expected_pages, \
-        f"Ожидамое кол-во страниц - {expected_pages}, фактическое - {data['pages']}"
+        f"Expected pages {expected_pages}, got {data['pages']}"
 
 
 @pytest.mark.parametrize("start_page,size,num_pages", [
     (1, 4, 3),
     (1, 3, 4)
 ])
+@pytest.mark.positive
 @pytest.mark.usefixtures("fill_test_data")
-def test_pagination_unique_data(app_url, start_page, num_pages, size):
-    response = requests.get(f"{app_url}/api/users", params={'page': start_page, 'size': size})
+def test_pagination_unique_data(api_client, start_page, size, num_pages):
+    """Проверка уникальности данных на страницах"""
+    response = api_client.session.get("/api/users", params={'page': start_page, 'size': size})
     assert response.status_code == HTTPStatus.OK
-    previous_data = response.json()['items']
-    prev_ids = {item['id'] for item in previous_data}
 
-    for page in range(start_page + 1 , start_page + num_pages):
-        params = {'page': page, 'size': size}
-        response = requests.get(f"{app_url}/api/users", params=params)
+    previous_data = response.json()["items"]
+    previous_ids = {item["id"] for item in previous_data}
+
+    for page in range(start_page + 1, start_page + num_pages):
+        response = api_client.session.get("/api/users", params={'page': page, 'size': size})
         assert response.status_code == HTTPStatus.OK
-        current_data = response.json()['items']
-        curr_ids = {item['id'] for item in current_data}
 
-        assert  curr_ids != prev_ids, \
-                f"Данные на странице {page} совпадают с данными на странице {page - 1}"
+        current_data = response.json()["items"]
+        current_ids = {item["id"] for item in current_data}
 
-        prev_ids = curr_ids
+        assert not previous_ids.intersection(current_ids), \
+            f"Page {page} has duplicate IDs with page {page - 1}"
+
+        previous_ids = current_ids
