@@ -14,6 +14,7 @@ class UserData(SQLModel, table=True):
     last_name: str
     avatar: str
 
+
 class UserDataCreate(BaseModel):
     email: EmailStr
     first_name: str
@@ -24,6 +25,5 @@ class UserDataCreate(BaseModel):
 class UserDataUpdate(BaseModel):
     email: EmailStr | None = None
     first_name: str | None = None
-    last_name: str  | None = None
+    last_name: str | None = None
     avatar: HttpUrl | None = None
-
